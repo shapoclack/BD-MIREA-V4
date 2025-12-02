@@ -17,10 +17,11 @@ type QueryBuilder struct {
 	groupBy    []string
 	having     []string
 	orderBy    []string
-	aggregates map[string]string // колонка -> агрегатная функция
+	aggregates map[string]string
 	limit      int
 	offset     int
-	joins      []JoinClause // Для поддержки JOIN
+	joins      []JoinClause
+	subqueries []string
 }
 
 // JoinClause структура для хранения информации о JOIN
@@ -554,4 +555,171 @@ func (qb *QueryBuilder) Copy() *QueryBuilder {
 	}
 
 	return newQB
+}
+
+// ===== ТРЕБОВАНИЕ 1: ПОДЗАПРОСЫ =====
+
+// WhereInSubquery добавляет подзапрос в WHERE IN
+// Пример: WhereInSubquery("id", subqueryBuilder)
+func (qb *QueryBuilder) WhereInSubquery(column string, subquery *QueryBuilder) *QueryBuilder {
+	condition := fmt.Sprintf("%s IN (%s)", column, subquery.Build())
+	qb.conditions = append(qb.conditions, condition)
+	return qb
+}
+
+// WhereAny добавляет условие с оператором ANY
+// Пример: WhereAny("price", ">", subqueryBuilder)
+func (qb *QueryBuilder) WhereAny(column, operator string, subquery *QueryBuilder) *QueryBuilder {
+	condition := fmt.Sprintf("%s %s ANY(%s)", column, operator, subquery.Build())
+	qb.conditions = append(qb.conditions, condition)
+	return qb
+}
+
+// WhereAll добавляет условие с оператором ALL
+// Пример: WhereAll("price", "<", subqueryBuilder)
+func (qb *QueryBuilder) WhereAll(column, operator string, subquery *QueryBuilder) *QueryBuilder {
+	condition := fmt.Sprintf("%s %s ALL(%s)", column, operator, subquery.Build())
+	qb.conditions = append(qb.conditions, condition)
+	return qb
+}
+
+// WhereExists добавляет условие EXISTS
+// Пример: WhereExists(subqueryBuilder)
+func (qb *QueryBuilder) WhereExists(subquery *QueryBuilder) *QueryBuilder {
+	condition := fmt.Sprintf("EXISTS(%s)", subquery.Build())
+	qb.conditions = append(qb.conditions, condition)
+	return qb
+}
+
+// WhereNotExists добавляет условие NOT EXISTS
+// Пример: WhereNotExists(subqueryBuilder)
+func (qb *QueryBuilder) WhereNotExists(subquery *QueryBuilder) *QueryBuilder {
+	condition := fmt.Sprintf("NOT EXISTS(%s)", subquery.Build())
+	qb.conditions = append(qb.conditions, condition)
+	return qb
+}
+
+// ===== ТРЕБОВАНИЕ 3: SIMILAR TO ВМЕСТО REGEX =====
+
+// WhereSimilarTo добавляет условие SIMILAR TO (SQL стандарт)
+// Пример: WhereSimilarTo("name", "A%B")
+// Паттерны: _ (любой 1 символ), % (любые символы), | (OR)
+func (qb *QueryBuilder) WhereSimilarTo(column, pattern string) *QueryBuilder {
+	condition := fmt.Sprintf("%s SIMILAR TO '%s'", column, pattern)
+	qb.conditions = append(qb.conditions, condition)
+	return qb
+}
+
+// WhereNotSimilarTo добавляет условие NOT SIMILAR TO
+// Пример: WhereNotSimilarTo("name", "A%B")
+func (qb *QueryBuilder) WhereNotSimilarTo(column, pattern string) *QueryBuilder {
+	condition := fmt.Sprintf("%s NOT SIMILAR TO '%s'", column, pattern)
+	qb.conditions = append(qb.conditions, condition)
+	return qb
+}
+
+// ===== ТРЕБОВАНИЕ 5: CASE, COALESCE, NULLIF =====
+
+// CaseExpression структура для построения CASE выражений
+type CaseExpression struct {
+	whenClauses map[string]string // condition -> result
+	elseValue   string
+}
+
+// NewCase создаёт новое CASE выражение
+func NewCase() *CaseExpression {
+	return &CaseExpression{
+		whenClauses: make(map[string]string),
+	}
+}
+
+// When добавляет условие WHEN ... THEN ...
+// Пример: case.When("price > 100", "'Expensive'")
+func (ce *CaseExpression) When(condition, result string) *CaseExpression {
+	ce.whenClauses[condition] = result
+	return ce
+}
+
+// Else устанавливает значение ELSE
+func (ce *CaseExpression) Else(value string) *CaseExpression {
+	ce.elseValue = value
+	return ce
+}
+
+// Build собирает CASE выражение в SQL
+func (ce *CaseExpression) Build() string {
+	if len(ce.whenClauses) == 0 {
+		return ""
+	}
+
+	var caseStr strings.Builder
+	caseStr.WriteString("CASE")
+
+	for condition, result := range ce.whenClauses {
+		caseStr.WriteString(" WHEN ")
+		caseStr.WriteString(condition)
+		caseStr.WriteString(" THEN ")
+		caseStr.WriteString(result)
+	}
+
+	if ce.elseValue != "" {
+		caseStr.WriteString(" ELSE ")
+		caseStr.WriteString(ce.elseValue)
+	}
+
+	caseStr.WriteString(" END")
+	return caseStr.String()
+}
+
+// SelectCase добавляет CASE выражение в SELECT
+// Пример: SelectCase(case, "price_category")
+func (qb *QueryBuilder) SelectCase(caseExpr *CaseExpression, alias string) *QueryBuilder {
+	caseSQL := caseExpr.Build()
+	if caseSQL != "" {
+		if alias != "" {
+			caseSQL = fmt.Sprintf("%s AS %s", caseSQL, alias)
+		}
+		qb.columns = append(qb.columns, caseSQL)
+	}
+	return qb
+}
+
+// SelectCoalesce добавляет функцию COALESCE
+// COALESCE возвращает первое не-NULL значение
+// Пример: SelectCoalesce("description", "'No description'", "coalesce_desc")
+func (qb *QueryBuilder) SelectCoalesce(columns []string, alias string) *QueryBuilder {
+	if len(columns) == 0 {
+		return qb
+	}
+
+	coalesceSql := fmt.Sprintf("COALESCE(%s)", strings.Join(columns, ", "))
+	if alias != "" {
+		coalesceSql = fmt.Sprintf("%s AS %s", coalesceSql, alias)
+	}
+	qb.columns = append(qb.columns, coalesceSql)
+	return qb
+}
+
+// SelectNullif добавляет функцию NULLIF
+// NULLIF возвращает NULL если оба значения равны
+// Пример: SelectNullif("status", "'inactive'", "status_or_null")
+func (qb *QueryBuilder) SelectNullif(column1, column2, alias string) *QueryBuilder {
+	nullifSql := fmt.Sprintf("NULLIF(%s, %s)", column1, column2)
+	if alias != "" {
+		nullifSql = fmt.Sprintf("%s AS %s", nullifSql, alias)
+	}
+	qb.columns = append(qb.columns, nullifSql)
+	return qb
+}
+
+// WhereCoalesce добавляет условие WHERE с COALESCE
+// Пример: WhereCoalesce([]string{"name", "'Unknown'"}, "=", "'John'")
+func (qb *QueryBuilder) WhereCoalesce(columns []string, operator, value string) *QueryBuilder {
+	if len(columns) == 0 {
+		return qb
+	}
+
+	condition := fmt.Sprintf("COALESCE(%s) %s %s", strings.Join(columns, ", "), operator, value)
+	qb.conditions = append(qb.conditions, condition)
+	return qb
 }

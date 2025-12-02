@@ -533,3 +533,32 @@ func TestConnection(ctx context.Context, pool *pgxpool.Pool) error {
 	fmt.Printf("Подключение к PostgreSQL успешно: %s\n", version[:50]+"...")
 	return nil
 }
+
+type CustomTypeInfo struct {
+	Name        string
+	Kind        string
+	Values      []string
+	Fields      map[string]string
+	Description string
+}
+
+// Функции-обёртки для вызова из UI
+func CreateEnumTypeUI(ctx context.Context, pool *pgxpool.Pool, typeName string, values []string) error {
+	return CreateEnumType(ctx, pool, typeName, values)
+}
+
+func CreateCompositeTypeUI(ctx context.Context, pool *pgxpool.Pool, typeName string, fields map[string]string) error {
+	return CreateCompositeType(ctx, pool, typeName, fields)
+}
+
+func GetCustomTypesUI(ctx context.Context, pool *pgxpool.Pool) ([]map[string]interface{}, error) {
+	return GetCustomTypes(ctx, pool)
+}
+
+func DropEnumTypeUI(ctx context.Context, pool *pgxpool.Pool, typeName string) error {
+	return DropEnumType(ctx, pool, typeName)
+}
+
+func GetTypeInfoUI(ctx context.Context, pool *pgxpool.Pool, typeName string) (*TypeInfo, error) {
+	return GetTypeInfo(ctx, pool, typeName)
+}

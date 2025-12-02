@@ -17,16 +17,22 @@ import (
 
 // UISearchDialog создаёт диалог для поиска по текстовым полям
 func UISearchDialog(ctx context.Context, pool *pgxpool.Pool, window fyne.Window, tableName string) {
+
 	columnEntry := widget.NewEntry()
 	columnEntry.SetPlaceHolder("Столбец для поиска")
 
 	patternEntry := widget.NewEntry()
 	patternEntry.SetPlaceHolder("Паттерн поиска")
 
-	searchTypeSelect := widget.NewSelect(
-		[]string{"LIKE", "REGEX (~)", "REGEX NoCase (~*)", "NOT REGEX (!~)", "NOT REGEX NoCase (!~*)"},
-		func(s string) {},
-	)
+	searchTypeSelect := widget.NewSelect([]string{
+		"LIKE",
+		"SIMILAR TO",
+		"NOT SIMILAR TO",
+		"REGEX",
+		"REGEX NoCase",
+		"NOT REGEX !",
+		"NOT REGEX NoCase !",
+	}, nil)
 	searchTypeSelect.SetSelected("LIKE")
 
 	resultsLabel := widget.NewLabel("Результаты: 0 записей")
@@ -68,7 +74,13 @@ func UISearchDialog(ctx context.Context, pool *pgxpool.Pool, window fyne.Window,
 		// Применяем выбранный тип поиска
 		switch searchType {
 		case "LIKE":
-			qb.WhereLike(column, "%"+pattern+"%")
+			qb.WhereLike(column, pattern)
+		case "SIMILAR TO":
+			qb.WhereSimilarTo(column, pattern)
+		case "NOT SIMILAR TO":
+			qb.WhereNotSimilarTo(column, pattern)
+		case "REGEX":
+			qb.WhereRegex(column, pattern)
 		case "REGEX (~)":
 			qb.WhereRegex(column, pattern)
 		case "REGEX NoCase (~*)":

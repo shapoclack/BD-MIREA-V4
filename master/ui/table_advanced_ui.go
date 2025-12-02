@@ -18,6 +18,7 @@ import (
 func CreateAdvancedUI(window fyne.Window, ctx context.Context, pool *pgxpool.Pool) {
 	// Создаем главное меню
 	mainMenu := fyne.NewMainMenu(
+
 		fyne.NewMenu("Таблицы",
 			fyne.NewMenuItem("Создать таблицу", func() {
 				UICreateTablesWithTypes(ctx, pool, window)
@@ -60,9 +61,60 @@ func CreateAdvancedUI(window fyne.Window, ctx context.Context, pool *pgxpool.Poo
 				UIDropNotNull(ctx, pool, window)
 			}),
 		),
+		fyne.NewMenu("Типы данных",
+			fyne.NewMenuItem("Создать ENUM тип", func() {
+				UICreateEnumType(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("Создать составной тип", func() {
+				UICreateCompositeType(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("Просмотреть все типы", func() {
+				UIListCustomTypes(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("Информация о типе", func() {
+				UITypeInfo(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("Удалить тип", func() {
+				UIDropType(ctx, pool, window)
+			}),
+		),
+
+		fyne.NewMenu("Подзапросы",
+			fyne.NewMenuItem("Подзапрос ANY", func() {
+				UISubqueryAny(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("Подзапрос ALL", func() {
+				UISubqueryAll(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("Подзапрос EXISTS", func() {
+				UISubqueryExists(ctx, pool, window)
+			}),
+		),
+
+		fyne.NewMenu("Условные функции",
+			fyne.NewMenuItem("Конструктор CASE", func() {
+				UICaseConstructor(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("COALESCE функция", func() {
+				UICoalesceFunction(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("NULLIF функция", func() {
+				UINullifFunction(ctx, pool, window)
+			}),
+		),
 		fyne.NewMenu("Запросы",
 			fyne.NewMenuItem("Query Builder", func() {
 				UIQueryBuilder(ctx, pool, window)
+			}),
+			fyne.NewMenuItemSeparator(),
+			fyne.NewMenuItem("📊 ROLLUP Aggregation", func() {
+				UIRollupQuery(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("🎲 CUBE Aggregation", func() {
+				UICubeQuery(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("🔗 WITH (CTE)", func() {
+				UICTEBuilder(ctx, pool, window)
 			}),
 		),
 		fyne.NewMenu("Поиск & Функции",
@@ -79,6 +131,36 @@ func CreateAdvancedUI(window fyne.Window, ctx context.Context, pool *pgxpool.Poo
 		fyne.NewMenu("Подключение",
 			fyne.NewMenuItem("Тест подключения", func() {
 				UITestConnection(ctx, pool, window)
+			}),
+		),
+		fyne.NewMenu("Представления (VIEW/MV)",
+			fyne.NewMenuItem("📋 Create VIEW", func() {
+				UICreateView(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("✏️ Create or Replace VIEW", func() {
+				UICreateOrReplaceView(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("📜 List VIEWs", func() {
+				UIListViews(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("🔍 Get VIEW Definition", func() {
+				UIGetViewDefinition(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("🗑️ Drop VIEW", func() {
+				UIDropView(ctx, pool, window)
+			}),
+			fyne.NewMenuItemSeparator(),
+			fyne.NewMenuItem("💾 Create MATERIALIZED VIEW", func() {
+				UICreateMaterializedView(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("🔄 Refresh MATERIALIZED VIEW", func() {
+				UIRefreshMaterializedView(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("📜 List MATERIALIZED VIEWs", func() {
+				UIListMaterializedViews(ctx, pool, window)
+			}),
+			fyne.NewMenuItem("🗑️ Drop MATERIALIZED VIEW", func() {
+				UIDropMaterializedView(ctx, pool, window)
 			}),
 		),
 	)
@@ -267,7 +349,7 @@ func setOptimalColumnWidths(table *widget.Table, data [][]string) {
 	}
 }
 
-//  Функции UI диалогов
+// ========== Функции UI диалогов ==========
 
 // UITestConnection проверяет подключение к БД
 func UITestConnection(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
@@ -346,7 +428,7 @@ func UICreateTablesWithTypes(ctx context.Context, pool *pgxpool.Pool, window fyn
 	dlg.Show()
 }
 
-// UICreateTablesWithTypesButton - кнопка создания таблицы с обновлением UI
+// UICreateTablesWithTypesButton - кнопочная версия создания таблицы с обновлением UI
 func UICreateTablesWithTypesButton(ctx context.Context, pool *pgxpool.Pool, window fyne.Window,
 	dataPtr *[][]string, table *widget.Table, infoLabel *widget.Label,
 	currentTable *string, tableSelect *widget.Select) {
@@ -410,7 +492,7 @@ func UICreateTablesWithTypesButton(ctx context.Context, pool *pgxpool.Pool, wind
 
 			showInfo(window, fmt.Sprintf("Таблица '%s' создана!", tableName))
 
-			// Обновление списка таблиц
+			// Обновляем список таблиц
 			tablesList, _ := getTablesListFromDB(ctx, pool)
 			tableSelect.Options = tablesList
 			*currentTable = tableName
@@ -423,7 +505,7 @@ func UICreateTablesWithTypesButton(ctx context.Context, pool *pgxpool.Pool, wind
 	dlg.Show()
 }
 
-// UIRenameTable переименование таблицы
+// UIRenameTable создаёт диалог для переименования таблицы
 func UIRenameTable(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	oldTableEntry := widget.NewEntry()
 	oldTableEntry.SetPlaceHolder("Текущее имя таблицы")
@@ -447,10 +529,9 @@ func UIRenameTable(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) 
 			showInfo(window, "Таблица успешно переименована!")
 		}
 	}, window)
-
 }
 
-// UIAddColumn  добавление столбца
+// UIAddColumn создаёт диалог для добавления столбца
 func UIAddColumn(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	tableEntry := widget.NewEntry()
 	tableEntry.SetPlaceHolder("Имя таблицы")
@@ -484,7 +565,7 @@ func UIAddColumn(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	}, window)
 }
 
-// UIDropColumn удаление столбца
+// UIDropColumn создаёт диалог для удаления столбца
 func UIDropColumn(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	tableEntry := widget.NewEntry()
 	tableEntry.SetPlaceHolder("Имя таблицы")
@@ -510,7 +591,7 @@ func UIDropColumn(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	}, window)
 }
 
-// UIAlterColumnType изменения типа столбца
+// UIAlterColumnType создаёт диалог для изменения типа столбца
 func UIAlterColumnType(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	tableEntry := widget.NewEntry()
 	tableEntry.SetPlaceHolder("Имя таблицы")
@@ -540,7 +621,7 @@ func UIAlterColumnType(ctx context.Context, pool *pgxpool.Pool, window fyne.Wind
 	}, window)
 }
 
-// UIRenameColumn переименование столбца
+// UIRenameColumn создаёт диалог для переименования столбца
 func UIRenameColumn(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	tableEntry := widget.NewEntry()
 	tableEntry.SetPlaceHolder("Имя таблицы")
@@ -572,7 +653,7 @@ func UIRenameColumn(ctx context.Context, pool *pgxpool.Pool, window fyne.Window)
 
 // ========== UI для операций с ограничениями ==========
 
-// UIAddCheck  для добавление CHECK ограничения
+// UIAddCheck создаёт диалог для добавления CHECK ограничения
 func UIAddCheck(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	tableEntry := widget.NewEntry()
 	tableEntry.SetPlaceHolder("Имя таблицы")
@@ -602,7 +683,7 @@ func UIAddCheck(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	}, window)
 }
 
-// UIDropConstraint удалениe ограничения
+// UIDropConstraint создаёт диалог для удаления ограничения
 func UIDropConstraint(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	tableEntry := widget.NewEntry()
 	tableEntry.SetPlaceHolder("Имя таблицы")
@@ -628,7 +709,7 @@ func UIDropConstraint(ctx context.Context, pool *pgxpool.Pool, window fyne.Windo
 	}, window)
 }
 
-// UISetNotNull для установка NOT NULL
+// UISetNotNull создаёт диалог для установки NOT NULL
 func UISetNotNull(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	tableEntry := widget.NewEntry()
 	tableEntry.SetPlaceHolder("Имя таблицы")
@@ -654,7 +735,7 @@ func UISetNotNull(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	}, window)
 }
 
-// UIDropNotNull удаление NOT NULL
+// UIDropNotNull создаёт диалог для удаления NOT NULL
 func UIDropNotNull(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	tableEntry := widget.NewEntry()
 	tableEntry.SetPlaceHolder("Имя таблицы")
@@ -680,7 +761,7 @@ func UIDropNotNull(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) 
 	}, window)
 }
 
-// UIAddUnique для добавления UNIQUE ограничения
+// UIAddUnique создаёт диалог для добавления UNIQUE ограничения
 func UIAddUnique(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	tableEntry := widget.NewEntry()
 	tableEntry.SetPlaceHolder("Имя таблицы")
@@ -710,7 +791,7 @@ func UIAddUnique(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	}, window)
 }
 
-// UIAddForeignKey добавление FOREIGN KEY
+// UIAddForeignKey создаёт диалог для добавления FOREIGN KEY
 func UIAddForeignKey(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
 	tableEntry := widget.NewEntry()
 	tableEntry.SetPlaceHolder("Имя таблицы")
@@ -752,6 +833,20 @@ func UIAddForeignKey(ctx context.Context, pool *pgxpool.Pool, window fyne.Window
 
 // UIQueryBuilder создаёт интерактивный построитель запросов
 func UIQueryBuilder(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
+	groupByEntry := widget.NewEntry()
+	groupByEntry.SetPlaceHolder("GROUP BY столбцы (через запятую)")
+
+	aggregateFunctionSelect := widget.NewSelect([]string{
+		"COUNT", "SUM", "AVG", "MIN", "MAX",
+	}, nil)
+	aggregateFunctionSelect.PlaceHolder = "Агрегатная функция"
+
+	aggregateColumnEntry := widget.NewEntry()
+	aggregateColumnEntry.SetPlaceHolder("Столбец для агрегата")
+
+	havingEntry := widget.NewEntry()
+	havingEntry.SetPlaceHolder("HAVING (например: COUNT(*) > 5)")
+
 	tableEntry := widget.NewEntry()
 	tableEntry.SetPlaceHolder("Имя таблицы")
 	tableEntry.SetText("products")
@@ -792,21 +887,30 @@ func UIQueryBuilder(ctx context.Context, pool *pgxpool.Pool, window fyne.Window)
 
 	executeButton := widget.NewButton("Выполнить", func() {
 		tableName := strings.TrimSpace(tableEntry.Text)
+		qb := operation.NewQueryBuilder(tableName)
 		if tableName == "" {
 			showError(window, "Укажите имя таблицы")
 			return
 		}
 
-		qb := operation.NewQueryBuilder(tableName)
-
 		if where := strings.TrimSpace(whereEntry.Text); where != "" {
 			qb.Where(where)
 		}
-
+		if groupByFields := strings.TrimSpace(groupByEntry.Text); groupByFields != "" {
+			for _, field := range strings.Split(groupByFields, ",") {
+				qb.GroupBy(strings.TrimSpace(field))
+			}
+		}
+		if fn := aggregateFunctionSelect.Selected; fn != "" && aggregateColumnEntry.Text != "" {
+			qb.Aggregate(aggregateColumnEntry.Text, operation.AggregateFunc(fn))
+		}
 		if limitStr := strings.TrimSpace(limitEntry.Text); limitStr != "" {
 			if limit, err := strconv.Atoi(limitStr); err == nil {
 				qb.Limit(limit)
 			}
+		}
+		if havingCondition := strings.TrimSpace(havingEntry.Text); havingCondition != "" {
+			qb.Having(havingCondition)
 		}
 
 		queryPreview.SetText(qb.Build())
@@ -1151,4 +1255,672 @@ func loadTableByName(ctx context.Context, pool *pgxpool.Pool, tableName string,
 		}
 		infoLabel.SetText(fmt.Sprintf("Таблица: %s | Строк: %d", tableName, rowCount))
 	}
+}
+func UICreateEnumType(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
+	typeNameEntry := widget.NewEntry()
+	typeNameEntry.SetPlaceHolder("Имя ENUM типа")
+
+	valuesEntry := widget.NewMultiLineEntry()
+	valuesEntry.SetPlaceHolder("Значения (каждое с новой строки)\nПримеры:\nactive\ninactive\npending")
+	valuesEntry.SetMinRowsVisible(5)
+
+	form := container.NewVBox(
+		widget.NewLabel("Создание ENUM типа"),
+		widget.NewForm(
+			widget.NewFormItem("Имя типа", typeNameEntry),
+		),
+		widget.NewLabel("Значения ENUM:"),
+		valuesEntry,
+	)
+
+	dialog.ShowCustomConfirm("Создать ENUM", "Создать", "Отмена", form, func(ok bool) {
+		if ok {
+			typeName := strings.TrimSpace(typeNameEntry.Text)
+			if typeName == "" {
+				showError(window, "Укажите имя типа")
+				return
+			}
+
+			lines := strings.Split(valuesEntry.Text, "\n")
+			var values []string
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if line != "" {
+					values = append(values, line)
+				}
+			}
+
+			if len(values) == 0 {
+				showError(window, "Укажите хотя бы одно значение")
+				return
+			}
+
+			err := operation.CreateEnumType(ctx, pool, typeName, values)
+			if err != nil {
+				showError(window, "Ошибка создания типа: "+err.Error())
+				return
+			}
+
+			showInfo(window, fmt.Sprintf("ENUM тип '%s' успешно создан!", typeName))
+		}
+	}, window)
+}
+
+// UICreateCompositeType создаёт диалог для создания составного типа
+func UICreateCompositeType(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
+	typeNameEntry := widget.NewEntry()
+	typeNameEntry.SetPlaceHolder("Имя составного типа")
+
+	fieldsEntry := widget.NewMultiLineEntry()
+	fieldsEntry.SetPlaceHolder("Поля типа (каждое с новой строки в формате: имя тип)\nПримеры:\nstreet VARCHAR(255)\ncity VARCHAR(100)\npostal_code VARCHAR(10)")
+	fieldsEntry.SetMinRowsVisible(5)
+
+	form := container.NewVBox(
+		widget.NewLabel("Создание составного типа"),
+		widget.NewForm(
+			widget.NewFormItem("Имя типа", typeNameEntry),
+		),
+		widget.NewLabel("Определения полей:"),
+		fieldsEntry,
+	)
+
+	dialog.ShowCustomConfirm("Создать составной тип", "Создать", "Отмена", form, func(ok bool) {
+		if ok {
+			typeName := strings.TrimSpace(typeNameEntry.Text)
+			if typeName == "" {
+				showError(window, "Укажите имя типа")
+				return
+			}
+
+			lines := strings.Split(fieldsEntry.Text, "\n")
+			fields := make(map[string]string)
+
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+
+				parts := strings.Fields(line)
+				if len(parts) < 2 {
+					showError(window, "Неверный формат поля: "+line)
+					return
+				}
+
+				fieldName := parts[0]
+				fieldType := strings.Join(parts[1:], " ")
+				fields[fieldName] = fieldType
+			}
+
+			if len(fields) == 0 {
+				showError(window, "Укажите хотя бы одно поле")
+				return
+			}
+
+			err := operation.CreateCompositeType(ctx, pool, typeName, fields)
+			if err != nil {
+				showError(window, "Ошибка создания типа: "+err.Error())
+				return
+			}
+
+			showInfo(window, fmt.Sprintf("Составной тип '%s' успешно создан!", typeName))
+		}
+	}, window)
+}
+
+// UIListCustomTypes показывает все пользовательские типы
+func UIListCustomTypes(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
+	types, err := operation.GetCustomTypes(ctx, pool)
+	if err != nil {
+		showError(window, "Ошибка получения типов: "+err.Error())
+		return
+	}
+
+	var tableData [][]string
+	tableData = append(tableData, []string{"Имя типа", "Тип", "Описание"})
+
+	for _, t := range types {
+		typeName, _ := t["type_name"].(string)
+		typeKind, _ := t["type_kind"].(string)
+		desc := ""
+		if descPtr, ok := t["description"].(*string); ok && descPtr != nil {
+			desc = *descPtr // ← Разыменовываем указатель (*descPtr → строка)
+		}
+
+		if desc == "" {
+			desc = "—"
+		}
+		tableData = append(tableData, []string{typeName, typeKind, desc})
+	}
+
+	table, err := CreateTable(tableData)
+	if err != nil {
+		showError(window, err.Error())
+		return
+	}
+
+	typesWindow := fyne.CurrentApp().NewWindow("Пользовательские типы")
+	typesWindow.SetContent(container.NewScroll(table))
+	typesWindow.Resize(fyne.NewSize(700, 500))
+	typesWindow.CenterOnScreen()
+	typesWindow.Show()
+}
+
+// UITypeInfo показывает информацию о типе
+func UITypeInfo(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
+	typeNameEntry := widget.NewEntry()
+	typeNameEntry.SetPlaceHolder("Имя типа")
+
+	form := widget.NewForm(
+		widget.NewFormItem("Имя типа", typeNameEntry),
+	)
+
+	dialog.ShowCustomConfirm("Информация о типе", "Показать", "Отмена", form, func(ok bool) {
+		if ok {
+			typeName := strings.TrimSpace(typeNameEntry.Text)
+			if typeName == "" {
+				showError(window, "Укажите имя типа")
+				return
+			}
+
+			info, err := operation.GetTypeInfo(ctx, pool, typeName)
+			if err != nil {
+				showError(window, "Ошибка: "+err.Error())
+				return
+			}
+
+			var content *fyne.Container
+			if info.Kind == "ENUM" {
+				valuesList := widget.NewLabel(strings.Join(info.Values, ", "))
+				content = container.NewVBox(
+					widget.NewCard("Тип", "ENUM", container.NewVBox(
+						widget.NewLabel("Имя: "+info.Name),
+						widget.NewLabel("Значения:"),
+						valuesList,
+					)),
+				)
+			} else if info.Kind == "COMPOSITE" {
+				var fieldTexts []string
+				for fieldName, fieldType := range info.Fields {
+					fieldTexts = append(fieldTexts, fmt.Sprintf("%s: %s", fieldName, fieldType))
+				}
+				fieldsList := widget.NewLabel(strings.Join(fieldTexts, "\n"))
+				content = container.NewVBox(
+					widget.NewCard("Тип", "COMPOSITE", container.NewVBox(
+						widget.NewLabel("Имя: "+info.Name),
+						widget.NewLabel("Поля:"),
+						fieldsList,
+					)),
+				)
+			}
+
+			infoWindow := fyne.CurrentApp().NewWindow("Информация о типе: " + typeName)
+			infoWindow.SetContent(container.NewScroll(content))
+			infoWindow.Resize(fyne.NewSize(600, 400))
+			infoWindow.CenterOnScreen()
+			infoWindow.Show()
+		}
+	}, window)
+}
+
+// UIDropType удаляет тип
+func UIDropType(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
+	typeNameEntry := widget.NewEntry()
+	typeNameEntry.SetPlaceHolder("Имя типа для удаления")
+
+	form := widget.NewForm(
+		widget.NewFormItem("Имя типа", typeNameEntry),
+	)
+
+	dialog.ShowCustomConfirm("Удалить тип", "Удалить", "Отмена", form, func(ok bool) {
+		if ok {
+			typeName := strings.TrimSpace(typeNameEntry.Text)
+			if typeName == "" {
+				showError(window, "Укажите имя типа")
+				return
+			}
+
+			err := operation.DropEnumType(ctx, pool, typeName)
+			if err != nil {
+				showError(window, "Ошибка удаления: "+err.Error())
+				return
+			}
+
+			showInfo(window, fmt.Sprintf("Тип '%s' успешно удален!", typeName))
+		}
+	}, window)
+}
+func UISubqueryAny(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
+	mainTableEntry := widget.NewEntry()
+	mainTableEntry.SetPlaceHolder("Основная таблица")
+
+	columnEntry := widget.NewEntry()
+	columnEntry.SetPlaceHolder("Столбец для сравнения")
+
+	opSelect := widget.NewSelect([]string{"=", ">", "<", ">=", "<=", "!="}, nil)
+	opSelect.SetSelected("=")
+
+	subTableEntry := widget.NewEntry()
+	subTableEntry.SetPlaceHolder("Таблица в подзапросе")
+
+	subColumnEntry := widget.NewEntry()
+	subColumnEntry.SetPlaceHolder("Столбец из подзапроса")
+
+	form := container.NewVBox(
+		widget.NewCard("Основной запрос", "", widget.NewForm(
+			widget.NewFormItem("Таблица", mainTableEntry),
+			widget.NewFormItem("Столбец", columnEntry),
+		)),
+		widget.NewCard("Подзапрос", "", widget.NewForm(
+			widget.NewFormItem("Оператор", opSelect),
+			widget.NewFormItem("Таблица подзапроса", subTableEntry),
+			widget.NewFormItem("Столбец подзапроса", subColumnEntry),
+		)),
+	)
+
+	dialog.ShowCustomConfirm("Подзапрос ANY", "Выполнить", "Отмена", form, func(ok bool) {
+		if ok {
+			mainTable := strings.TrimSpace(mainTableEntry.Text)
+			column := strings.TrimSpace(columnEntry.Text)
+			operator := opSelect.Selected
+			subTable := strings.TrimSpace(subTableEntry.Text)
+			subColumn := strings.TrimSpace(subColumnEntry.Text)
+
+			if mainTable == "" || column == "" || subTable == "" || subColumn == "" {
+				showError(window, "Заполните все поля")
+				return
+			}
+
+			qb := operation.NewQueryBuilder(mainTable)
+			subQb := operation.NewQueryBuilder(subTable).Select(subColumn)
+			qb.WhereAny(column, operator, subQb)
+
+			results, err := qb.Execute(ctx, pool)
+			if err != nil {
+				showError(window, "Ошибка: "+err.Error())
+				return
+			}
+
+			resultTable, err := CreateTable(results)
+			if err != nil {
+				showError(window, err.Error())
+				return
+			}
+
+			resultWindow := fyne.CurrentApp().NewWindow("Результаты подзапроса ANY")
+			resultWindow.SetContent(container.NewVBox(
+				widget.NewCard("SQL", "", widget.NewLabel(qb.Build())),
+				container.NewScroll(resultTable),
+			))
+			resultWindow.Resize(fyne.NewSize(900, 600))
+			resultWindow.CenterOnScreen()
+			resultWindow.Show()
+		}
+	}, window)
+}
+
+// UISubqueryExists создаёт диалог для подзапроса с EXISTS
+func UISubqueryExists(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
+	mainTableEntry := widget.NewEntry()
+	mainTableEntry.SetPlaceHolder("Основная таблица")
+
+	subTableEntry := widget.NewEntry()
+	subTableEntry.SetPlaceHolder("Таблица в подзапросе")
+
+	joinConditionEntry := widget.NewEntry()
+	joinConditionEntry.SetPlaceHolder("Условие связи (например: products.category_id = categories.id)")
+
+	form := container.NewVBox(
+		widget.NewCard("Основной запрос", "", widget.NewForm(
+			widget.NewFormItem("Таблица", mainTableEntry),
+		)),
+		widget.NewCard("Подзапрос EXISTS", "", widget.NewForm(
+			widget.NewFormItem("Таблица подзапроса", subTableEntry),
+			widget.NewFormItem("Условие связи", joinConditionEntry),
+		)),
+	)
+
+	dialog.ShowCustomConfirm("Подзапрос EXISTS", "Выполнить", "Отмена", form, func(ok bool) {
+		if ok {
+			mainTable := strings.TrimSpace(mainTableEntry.Text)
+			subTable := strings.TrimSpace(subTableEntry.Text)
+			joinCondition := strings.TrimSpace(joinConditionEntry.Text)
+
+			if mainTable == "" || subTable == "" || joinCondition == "" {
+				showError(window, "Заполните все поля")
+				return
+			}
+
+			qb := operation.NewQueryBuilder(mainTable)
+			subQb := operation.NewQueryBuilder(subTable).Where(joinCondition)
+			qb.WhereExists(subQb)
+
+			results, err := qb.Execute(ctx, pool)
+			if err != nil {
+				showError(window, "Ошибка: "+err.Error())
+				return
+			}
+
+			resultTable, err := CreateTable(results)
+			if err != nil {
+				showError(window, err.Error())
+				return
+			}
+
+			resultWindow := fyne.CurrentApp().NewWindow("Результаты подзапроса EXISTS")
+			resultWindow.SetContent(container.NewVBox(
+				widget.NewCard("SQL", "", widget.NewLabel(qb.Build())),
+				container.NewScroll(resultTable),
+			))
+			resultWindow.Resize(fyne.NewSize(900, 600))
+			resultWindow.CenterOnScreen()
+			resultWindow.Show()
+		}
+	}, window)
+}
+
+// ========== ТРЕБОВАНИЕ 5: CASE, COALESCE, NULLIF ==========
+
+// UICaseConstructor создаёт конструктор CASE выражений
+func UICaseConstructor(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
+	tableEntry := widget.NewEntry()
+	tableEntry.SetPlaceHolder("Таблица")
+
+	columnEntry := widget.NewEntry()
+	columnEntry.SetPlaceHolder("Столбец для CASE")
+
+	whenThenEntry := widget.NewMultiLineEntry()
+	whenThenEntry.SetPlaceHolder("Условия WHEN ... THEN (каждое с новой строки)\nПримеры:\nprice > 100|'Expensive'\nprice > 50|'Medium'")
+	whenThenEntry.SetMinRowsVisible(5)
+
+	elseEntry := widget.NewEntry()
+	elseEntry.SetPlaceHolder("Значение ELSE")
+	elseEntry.SetText("'Other'")
+
+	aliasEntry := widget.NewEntry()
+	aliasEntry.SetPlaceHolder("Имя результата (алиас)")
+
+	form := container.NewVBox(
+		widget.NewForm(
+			widget.NewFormItem("Таблица", tableEntry),
+			widget.NewFormItem("Столбец", columnEntry),
+		),
+		widget.NewLabel("Условия WHEN|THEN:"),
+		whenThenEntry,
+		widget.NewForm(
+			widget.NewFormItem("ELSE значение", elseEntry),
+			widget.NewFormItem("Результат (алиас)", aliasEntry),
+		),
+	)
+
+	dialog.ShowCustomConfirm("Конструктор CASE", "Выполнить", "Отмена", form, func(ok bool) {
+		if ok {
+			table := strings.TrimSpace(tableEntry.Text)
+			alias := strings.TrimSpace(aliasEntry.Text)
+			elseVal := strings.TrimSpace(elseEntry.Text)
+
+			if table == "" {
+				showError(window, "Укажите таблицу")
+				return
+			}
+
+			qb := operation.NewQueryBuilder(table)
+			caseExpr := operation.NewCase()
+
+			lines := strings.Split(whenThenEntry.Text, "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+
+				parts := strings.Split(line, "|")
+				if len(parts) != 2 {
+					showError(window, "Неверный формат: "+line)
+					return
+				}
+
+				condition := strings.TrimSpace(parts[0])
+				result := strings.TrimSpace(parts[1])
+				caseExpr.When(condition, result)
+			}
+
+			if elseVal != "" {
+				caseExpr.Else(elseVal)
+			}
+
+			qb.SelectCase(caseExpr, alias)
+			qb.Limit(10)
+
+			results, err := qb.Execute(ctx, pool)
+			if err != nil {
+				showError(window, "Ошибка: "+err.Error())
+				return
+			}
+
+			resultTable, err := CreateTable(results)
+			if err != nil {
+				showError(window, err.Error())
+				return
+			}
+
+			resultWindow := fyne.CurrentApp().NewWindow("Результаты CASE")
+			resultWindow.SetContent(container.NewVBox(
+				widget.NewCard("SQL", "", widget.NewLabel(qb.Build())),
+				container.NewScroll(resultTable),
+			))
+			resultWindow.Resize(fyne.NewSize(900, 600))
+			resultWindow.CenterOnScreen()
+			resultWindow.Show()
+		}
+	}, window)
+}
+
+// UICoalesceFunction работает с COALESCE
+func UICoalesceFunction(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
+	tableEntry := widget.NewEntry()
+	tableEntry.SetPlaceHolder("Таблица")
+
+	columnsEntry := widget.NewMultiLineEntry()
+	columnsEntry.SetPlaceHolder("Столбцы в приоритете (каждый с новой строки)\nПримеры:\ndescription\n'No description'")
+	columnsEntry.SetMinRowsVisible(3)
+
+	aliasEntry := widget.NewEntry()
+	aliasEntry.SetPlaceHolder("Имя результата")
+
+	form := container.NewVBox(
+		widget.NewForm(
+			widget.NewFormItem("Таблица", tableEntry),
+		),
+		widget.NewLabel("Столбцы (в порядке приоритета):"),
+		columnsEntry,
+		widget.NewForm(
+			widget.NewFormItem("Результат (алиас)", aliasEntry),
+		),
+	)
+
+	dialog.ShowCustomConfirm("COALESCE функция", "Выполнить", "Отмена", form, func(ok bool) {
+		if ok {
+			table := strings.TrimSpace(tableEntry.Text)
+			alias := strings.TrimSpace(aliasEntry.Text)
+
+			if table == "" {
+				showError(window, "Укажите таблицу")
+				return
+			}
+
+			lines := strings.Split(columnsEntry.Text, "\n")
+			var columns []string
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if line != "" {
+					columns = append(columns, line)
+				}
+			}
+
+			if len(columns) == 0 {
+				showError(window, "Укажите столбцы")
+				return
+			}
+
+			qb := operation.NewQueryBuilder(table)
+			qb.SelectCoalesce(columns, alias)
+			qb.Limit(10)
+
+			results, err := qb.Execute(ctx, pool)
+			if err != nil {
+				showError(window, "Ошибка: "+err.Error())
+				return
+			}
+
+			resultTable, err := CreateTable(results)
+			if err != nil {
+				showError(window, err.Error())
+				return
+			}
+
+			resultWindow := fyne.CurrentApp().NewWindow("Результаты COALESCE")
+			resultWindow.SetContent(container.NewVBox(
+				widget.NewCard("SQL", "", widget.NewLabel(qb.Build())),
+				container.NewScroll(resultTable),
+			))
+			resultWindow.Resize(fyne.NewSize(900, 600))
+			resultWindow.CenterOnScreen()
+			resultWindow.Show()
+		}
+	}, window)
+}
+
+// UISubqueryAll создаёт диалог для подзапроса с ALL
+func UISubqueryAll(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
+	mainTableEntry := widget.NewEntry()
+	mainTableEntry.SetPlaceHolder("Основная таблица")
+
+	columnEntry := widget.NewEntry()
+	columnEntry.SetPlaceHolder("Столбец для сравнения")
+
+	opSelect := widget.NewSelect([]string{"=", ">", "<", ">=", "<=", "!="}, nil)
+	opSelect.SetSelected("=")
+
+	subTableEntry := widget.NewEntry()
+	subTableEntry.SetPlaceHolder("Таблица в подзапросе")
+
+	subColumnEntry := widget.NewEntry()
+	subColumnEntry.SetPlaceHolder("Столбец из подзапроса")
+
+	form := container.NewVBox(
+		widget.NewCard("Основной запрос", "", widget.NewForm(
+			widget.NewFormItem("Таблица", mainTableEntry),
+			widget.NewFormItem("Столбец", columnEntry),
+		)),
+		widget.NewCard("Подзапрос", "", widget.NewForm(
+			widget.NewFormItem("Оператор", opSelect),
+			widget.NewFormItem("Таблица подзапроса", subTableEntry),
+			widget.NewFormItem("Столбец подзапроса", subColumnEntry),
+		)),
+	)
+
+	dialog.ShowCustomConfirm("Подзапрос ALL", "Выполнить", "Отмена", form, func(ok bool) {
+		if ok {
+			mainTable := strings.TrimSpace(mainTableEntry.Text)
+			column := strings.TrimSpace(columnEntry.Text)
+			operator := opSelect.Selected
+			subTable := strings.TrimSpace(subTableEntry.Text)
+			subColumn := strings.TrimSpace(subColumnEntry.Text)
+
+			if mainTable == "" || column == "" || subTable == "" || subColumn == "" {
+				showError(window, "Заполните все поля")
+				return
+			}
+
+			qb := operation.NewQueryBuilder(mainTable)
+			subQb := operation.NewQueryBuilder(subTable).Select(subColumn)
+			qb.WhereAll(column, operator, subQb)
+
+			results, err := qb.Execute(ctx, pool)
+			if err != nil {
+				showError(window, "Ошибка: "+err.Error())
+				return
+			}
+
+			resultTable, err := CreateTable(results)
+			if err != nil {
+				showError(window, err.Error())
+				return
+			}
+
+			resultWindow := fyne.CurrentApp().NewWindow("Результаты подзапроса ALL")
+			resultWindow.SetContent(container.NewVBox(
+				widget.NewCard("SQL", "", widget.NewLabel(qb.Build())),
+				container.NewScroll(resultTable),
+			))
+			resultWindow.Resize(fyne.NewSize(900, 600))
+			resultWindow.CenterOnScreen()
+			resultWindow.Show()
+		}
+	}, window)
+}
+
+// UINullifFunction работает с NULLIF
+func UINullifFunction(ctx context.Context, pool *pgxpool.Pool, window fyne.Window) {
+	tableEntry := widget.NewEntry()
+	tableEntry.SetPlaceHolder("Таблица")
+
+	column1Entry := widget.NewEntry()
+	column1Entry.SetPlaceHolder("Столбец 1")
+
+	column2Entry := widget.NewEntry()
+	column2Entry.SetPlaceHolder("Столбец 2 или значение")
+
+	aliasEntry := widget.NewEntry()
+	aliasEntry.SetPlaceHolder("Имя результата (алиас)")
+
+	form := container.NewVBox(
+		widget.NewForm(
+			widget.NewFormItem("Таблица", tableEntry),
+			widget.NewFormItem("Столбец 1", column1Entry),
+			widget.NewFormItem("Столбец 2/значение", column2Entry),
+			widget.NewFormItem("Результат (алиас)", aliasEntry),
+		),
+		widget.NewLabel("NULLIF возвращает NULL если оба значения равны"),
+	)
+
+	dialog.ShowCustomConfirm("NULLIF функция", "Выполнить", "Отмена", form, func(ok bool) {
+		if ok {
+			table := strings.TrimSpace(tableEntry.Text)
+			col1 := strings.TrimSpace(column1Entry.Text)
+			col2 := strings.TrimSpace(column2Entry.Text)
+			alias := strings.TrimSpace(aliasEntry.Text)
+
+			if table == "" || col1 == "" || col2 == "" {
+				showError(window, "Укажите все параметры")
+				return
+			}
+
+			qb := operation.NewQueryBuilder(table)
+			qb.SelectNullif(col1, col2, alias)
+			qb.Limit(10)
+
+			results, err := qb.Execute(ctx, pool)
+			if err != nil {
+				showError(window, "Ошибка: "+err.Error())
+				return
+			}
+
+			resultTable, err := CreateTable(results)
+			if err != nil {
+				showError(window, err.Error())
+				return
+			}
+
+			resultWindow := fyne.CurrentApp().NewWindow("Результаты NULLIF")
+			resultWindow.SetContent(container.NewVBox(
+				widget.NewCard("SQL", "", widget.NewLabel(qb.Build())),
+				container.NewScroll(resultTable),
+			))
+			resultWindow.Resize(fyne.NewSize(900, 600))
+			resultWindow.CenterOnScreen()
+			resultWindow.Show()
+		}
+	}, window)
 }
